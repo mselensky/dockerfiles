@@ -12,7 +12,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends git
 
 USER $MAMBA_USER
 ARG MAMBA_DOCKERFILE_ACTIVATE=1
-ARG start_here=true1
 RUN git clone https://github.com/biobakery/halla.git $HOME/halla
 
 RUN eval "$(micromamba shell hook --shell )"

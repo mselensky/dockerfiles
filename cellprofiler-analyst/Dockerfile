@@ -14,8 +14,6 @@ RUN apt-get update && apt-get install \
   build-essential \
   --no-install-recommends -y
 
-RUN git clone https://github.com/CellProfiler/CellProfiler-Analyst.git
-WORKDIR /CellProfiler-Analyst
 RUN ln -s /usr/bin/python3 /usr/bin/python
 RUN apt-get install pip libpng-dev libjpeg-dev --no-install-recommends -y
 RUN apt-get install libgtk2.0-dev libgtk-3-dev libglib2.0-dev --no-install-recommends -y
@@ -28,9 +26,11 @@ ENV SDL_CONFIG=/usr/bin/sdl-config
 # solve xlocale issue https://github.com/agracio/electron-edge-js/issues/16
 RUN ln -s /usr/include/locale.h /usr/include/xlocale.h
 
+# install CellProfiler-Analyst
+RUN git clone https://github.com/CellProfiler/CellProfiler-Analyst.git
+WORKDIR /CellProfiler-Analyst
 RUN python -m pip install numpy 
 RUN python -m pip install python-javabridge
 RUN python -m pip install .
 
-# cleanup
-#RUN rm -rf /CellProfiler-Analyst
+#/CellProfiler-Analyst/CellProfiler-Analyst.py

@@ -1,0 +1,42 @@
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+
+# for good measure
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
+ENV PYTHON_VERSION="3.10"
+
+RUN apt-get update && apt-get install \
+    python${PYTHON_VERSION} \
+    python${PYTHON_VERSION}-venv \
+    python3-pip \
+    git \
+    wget \
+    curl \
+    libglu1-mesa-dev \
+    libglib2.0-0 \
+    -y
+
+#RUN python -m pip install \
+#    ninja \
+#    yacs \
+#    cython \
+#    matplotlib \
+#    opencv-python \
+#    mlperf_compliance \
+#    torchvision \
+#    pycocotools \
+#    tabulate
+
+# try with as few Python packages as possible
+RUN python -m pip install cython tabulate mlperf_compliance pycocotools
+
+RUN python -m pip install --no-cache-dir https://github.com/mlperf/logging/archive/9ea0afa.zip
+
+# install cm interface for MLPerf
+RUN python3 -m venv cm
+RUN chmod +x cm/bin/activate 
+RUN ./cm/bin/activate && python3 -m pip install cmind
+
+#RUN sed -i 's|exec "/bin/bash"|exec "/bin/bash && source /cm/bin/activate"|' /opt/nvidia/nvidia_entrypoint.sh
+
+#ENTRYPOINT ["source /cm/bin/activate"]

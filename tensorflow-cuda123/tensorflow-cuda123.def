@@ -1,0 +1,17 @@
+Bootstrap docker
+From: mambaorg/micromamba
+
+%setup
+
+%files
+tensorflow-env-cuda123.yaml /tmp/env.yaml
+
+%post
+micromamba install -y -n base -f /tmp/env.yaml && \
+    micromamba clean --all --yes
+
+%startscript
+/usr/local/bin/_entrypoint.sh
+
+%runscript
+echo `date`

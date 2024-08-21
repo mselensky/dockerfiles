@@ -1,0 +1,97 @@
+FROM mjsel/ubuntu22.04:cuda12.4
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+### System libraries ###
+# libraries for TransformerEngine
+RUN apt-get update -y && apt-get install -y libsndfile1 ffmpeg # for TransformerEngine
+
+### Python / PyTorch ###
+# pytorch wheels for cuda 12.4
+RUN python -m pip install torch torchvision torchaudio --trusted-host download.pytorch.org --index-url https://download.pytorch.org/whl/cu124
+
+# other packages
+RUN python -m pip install Cython packaging
+RUN python -m pip install numba
+RUN python -m pip install ninja
+RUN python -m pip install "pybind11[global]"
+
+### Install tools ###
+
+RUN mkdir -p /tools
+WORKDIR /tools
+
+##### POSSIBLY NEED TO INSTALL UCX, UCC, NOT SURE; I'D DO IT HERE THOUGH.
+
+# define number of cores to use for compiling
+ARG BUILD_CORES=6
+
+# Tool: OpenMPI
+WORKDIR /tools/openmpi
+RUN wget https://download.open-mpi.org/release/open-mpi/v5.0/openmpi-5.0.5.tar.bz2 --no-check-certificate
+RUN tar -xf openmpi-5.0.5.tar.bz2
+WORKDIR openmpi-5.0.5
+RUN ./configure --prefix=/usr/local 2>&1 | tee config.out
+RUN make -j $BUILD_CORES all 2>&1 | tee make.out
+RUN make -j $BUILD_CORES install 2>&1 | tee make-install.out
+
+# Tool: Apex
+WORKDIR /tools
+RUN git clone https://github.com/NVIDIA/apex
+# if pip >= 23.1 (ref: https://pip.pypa.io/en/stable/news/#v23-1) which supports multiple `--config-settings` with the same key... 
+RUN cd apex && pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --global-option="--cpp_ext" --global-option="--cuda_ext" ./
+
+# need to provide more memory per core for building transformer engine
+ARG BUILD_CORES=3
+
+# Tool: Transformer Engine
+ENV CC=/usr/bin/gcc
+ENV CXX=/usr/bin/g++
+ENV CMAKE_C_COMPILER=$CC
+ENV CMAKE_CXX_COMPILER=$CXX
+ENV CMAKE_CUDA_COMPILER=${CUDA_HOME}/bin/nvcc
+ENV MPI_HOME=/usr/local/lib/openmpi
+ENV NVTE_CUDA_INCLUDE_PATH=$CUDA_HOME/include
+
+WORKDIR /tools/transformer-engine
+
+# trying this to get over this issue I encountered: https://github.com/pypa/setuptools/issues/3269
+RUN apt purge -y python3-setuptools
+RUN wget https://bootstrap.pypa.io/get-pip.py && python get-pip.py
+
+# install cudnn frontend API for Python
+RUN CUDNN_PATH=$CUDA_HOME python -m pip install -v git+https://github.com/NVIDIA/cudnn-frontend.git
+
+RUN git clone https://github.com/NVIDIA/TransformerEngine.git && \
+  cd TransformerEngine && \
+  git submodule update --init --recursive && \
+  NVTE_FRAMEWORK=pytorch NVTE_WITH_USERBUFFERS=1 MPI_HOME=$MPI_HOME CUDA_HOME=$CUDA_HOME CMAKE_CXX_COMPILER=$CXX CXX=$CXX MAX_JOBS=$BUILD_CORES python -m pip install .
+
+
+ARG BUILD_CORES=3
+# other Python packages required for Transformer Engine
+RUN MAX_JOBS=$BUILD_CORES python -m pip install flash-attn==2.5.8
+
+
+
+ARG BUILD_CORES=3
+# Tool: Megatron Core
+ENV MEGATRON_VERSION=core_v0.7.0
+WORKDIR /tools/megatron
+RUN wget https://github.com/NVIDIA/Megatron-LM/archive/refs/tags/${MEGATRON_VERSION}.tar.gz
+RUN tar -xzf ${MEGATRON_VERSION}.tar.gz 
+RUN cd Megatron-LM-${MEGATRON_VERSION} && python -m pip install .
+RUN cd Megatron-LM-${MEGATRON_VERSION}/megatron/core/datasets && \
+  make -j $BUILD_CORES
+
+
+### App: NeMo ###
+RUN python -m pip install nemo_toolkit['all']
+
+
+### Final things ###
+WORKDIR /workdir
+
+
+
+
